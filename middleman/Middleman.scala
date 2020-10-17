@@ -57,23 +57,24 @@ object ScalaProducerExample extends App {
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokers)
     props.put(ProducerConfig.CLIENT_ID_CONFIG, "Scala coronaAPI middleman")
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
-    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.springframework.kafka.support.serializer.JsonSerializer")
-    val producer = new KafkaProducer[String, JsonNode](props)
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
+    val producer = new KafkaProducer[String, String](props)
 
-    try {
-        val slug = "south-africa"
-        val url = "https://api.covid19api.com/country/south-africa/status/confirmed?from=2020-04-01T00:00:00Z&to=2020-04-02T00:00:00Z"
-        val content = get(url)
-        val mapper = new ObjectMapper()
-        val node = mapper.readTree(content);
-        val data = new ProducerRecord[String, JsonNode](topic, slug, node)
-        producer.send(data)
-        print(data)
+        try {
+            val slug = "wip"
+            val url = "https://api.covid19api.com/world/total"
+            val content = get(url)
+            //val mapper = new ObjectMapper()
+            //val node = mapper.readTree(content);
+            val data = new ProducerRecord[String, String](topic, slug, content)
+            producer.send(data)
+            print(data)
 
-    } catch {
-        case ioe: java.io.IOException =>  // handle this
-        case ste: java.net.SocketTimeoutException => // handle this
-    }
+        } catch {
+            case ioe: java.io.IOException =>  // handle this
+            case ste: java.net.SocketTimeoutException => // handle this
+        }
+
 
 
     producer.close()
