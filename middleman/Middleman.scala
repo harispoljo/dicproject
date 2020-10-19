@@ -50,7 +50,7 @@ object ScalaProducerExample extends App {
         content
     }
 
-    val topic = "corona"
+    val topic = "corona1"
     val brokers = "localhost:9092"
 
     val props = new Properties()
@@ -61,19 +61,27 @@ object ScalaProducerExample extends App {
     val producer = new KafkaProducer[String, String](props)
 
         try {
-            val slug = "wip"
-            val url = "https://api.covid19api.com/world/total"
+            val slug = "covid-update"
+            val url = "https://covid-19.dataflowkit.com/v1"
             val content = get(url)
-            //val mapper = new ObjectMapper()
-            //val node = mapper.readTree(content);
-            val data = new ProducerRecord[String, String](topic, slug, content)
-            producer.send(data)
-            print(data)
+            val mapper = new ObjectMapper()
+            val node = mapper.readTree(content);
+
+
+            for (x <- List.range(0, node.size-1)){
+
+                val countryjson = node.get(x)
+                val country = countryjson.get("Country_text")
+                val data = new ProducerRecord[String, String](topic, country.toString, countryjson.toString)
+                producer.send(data)
+                print(data)
+            }
 
         } catch {
             case ioe: java.io.IOException =>  // handle this
             case ste: java.net.SocketTimeoutException => // handle this
         }
+
 
 
 
