@@ -13,9 +13,8 @@ import org.apache.spark.storage.StorageLevel
 import java.util.{Date, Properties}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, ProducerConfig}
 import scala.util.Random
-import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind._
 import spray.json._
-
 
 import org.apache.spark.sql.cassandra._
 import com.datastax.spark.connector._
@@ -47,21 +46,23 @@ object KafkaSpark {
       "zookeeper.connection.timeout.ms" -> "1000")
 
 
-    val topics = Set("corona")
+    val topics = Set("corona1")
+    val mapper = new ObjectMapper();
+    val factory = mapper.getJsonFactory()
+
     val messages = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaConf, topics)
+    val tojson = messages.mapValues(x => ((x : String).parseJson).asJsObject)
 
-    val tojson = messages.mapValues(x => (x : String).parseJson)
+    def update_corona_cases(key: String, value: Option[JsObject], state: State[(String, Integer)]): (String, Integer) = {
+        val json : JsObject = value.getOrElse("""{"error":"error"}""".parseJson.asJsObject)
 
-
-    def update_corona_cases(key: String, value: Option[JsValue], state: State[(String, JsValue)]): (String, JsValue) = {
-        val json : JsValue = value.getOrElse("""{"error":"error"}""".parseJson)
-        state.update((key,json))
-        (key,json)
+        /*if you can extract int from JsValue differently pls do it lol*/
+        val total_cases = json.fields("Total Cases_text").toString.filterNot('"'.toString.toSet).filterNot(','.toString.toSet).toInt
+        state.update((key,total_cases))
+        (key,total_cases)
     }
 
-    val pairs = tojson.mapWithState(StateSpec.function(update_corona_cases _))
-    pairs.print()
-  
+    val pairs = tojson.mapWithState(StateSpec.function(update_corona_cases _))  
     pairs.saveToCassandra("covid_space", "covid", SomeColumns("country", "corona_cases"))
 
     ssc.start()
