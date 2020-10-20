@@ -63,18 +63,20 @@ object ScalaProducerExample extends App {
         try {
             val slug = "covid-update"
             val url = "https://covid-19.dataflowkit.com/v1"
-            val content = get(url)
+            val content = get(url).replace(" ","_")
             val mapper = new ObjectMapper()
             val node = mapper.readTree(content);
-
 
             for (x <- List.range(0, node.size-1)){
 
                 val countryjson = node.get(x)
                 val country = countryjson.get("Country_text")
+                val last_update = countryjson.get("Last_Update")
+                if (last_update != null){
                 val data = new ProducerRecord[String, String](topic, country.toString, countryjson.toString)
                 producer.send(data)
-                print(data)
+                println(data)
+                }
             }
 
         } catch {
