@@ -46,23 +46,30 @@ object KafkaSpark {
       "zookeeper.connection.timeout.ms" -> "1000")
 
 
+    case class CountryData(Active_Cases_text: String, Country_text: String, Last_Update: String, New_Cases_text: String, New_Deaths_text: String, Total_Cases_text: String, Total_Deaths_text: String, Total_Recovered_text: String)
+
+    object MyJsonProtocol extends DefaultJsonProtocol {
+      implicit val CountryDataFormat = jsonFormat8(CountryData)
+    }
+
+    import MyJsonProtocol._
+
     val topics = Set("corona1")
     val mapper = new ObjectMapper();
     val factory = mapper.getJsonFactory()
 
     val messages = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaConf, topics)
-    val tojson = messages.mapValues(x => ((x : String).parseJson).asJsObject)
+    val tojson = messages.mapValues(x =>  ((x : String).parseJson).convertTo[CountryData]).filter(x=> x._2.New_Cases_text != "")
 
-    def update_corona_cases(key: String, value: Option[JsObject], state: State[(String, Integer)]): (String, Integer) = {
-        val json : JsObject = value.getOrElse("""{"error":"error"}""".parseJson.asJsObject)
-
-        /*if you can extract int from JsValue differently pls do it lol*/
-        val total_cases = json.fields("Total Cases_text").toString.filterNot('"'.toString.toSet).filterNot(','.toString.toSet).toInt
-        state.update((key,total_cases))
-        (key,total_cases)
+    def update_corona_cases(key: String, value: Option[CountryData], state: State[(String, Integer)]): (String, Integer) = {
+      val data: CountryData = value.getOrElse(new CountryData("","","","","","","",""))
+      val newCases = data.New_Cases_text.replace(",","").toInt
+      state.update((key,newCases))
+      (key,newCases)
     }
 
-    val pairs = tojson.mapWithState(StateSpec.function(update_corona_cases _))  
+    val pairs = tojson.mapWithState(StateSpec.function(update_corona_cases _))
+    pairs.print()
     pairs.saveToCassandra("covid_space", "covid", SomeColumns("country", "corona_cases"))
 
     ssc.start()
