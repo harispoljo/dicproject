@@ -24,6 +24,9 @@ import com.datastax.spark.connector.streaming._
 
 import org.apache.spark.SparkContext
 
+
+import scala.collection.mutable.Queue
+
 object KafkaSpark {
   def main(args: Array[String]) {
     // connect to Cassandra and make a keyspace and table as explained in the document
@@ -47,6 +50,27 @@ object KafkaSpark {
       "zookeeper.connection.timeout.ms" -> "1000")
 
 
+      case class rollingAverage(amountofdays: Int) {
+      private val datalist = new Queue[Int]()
+
+      def addData(data: Int): Unit  = {
+        if (datalist.length < amountofdays){
+          datalist.enqueue(data)
+        }
+        else{
+          datalist.dequeue
+          datalist.enqueue(data)
+        }
+      }
+
+      def calculateAverage(): Double ={
+        print(datalist.foldLeft(0)(_ + _)/datalist.length)
+        datalist.foldLeft(0)(_ + _)/datalist.length
+      }
+
+
+    }
+
     case class CountryData(Active_Cases_text: String, Country_text: String, Last_Update: String, New_Cases_text: String, New_Deaths_text: String, Total_Cases_text: String, Total_Deaths_text: String, Total_Recovered_text: String)
     case class World_Population(country: String, population: Int)
 
@@ -62,7 +86,7 @@ object KafkaSpark {
 
 
     /*read world population*/
-    
+
     var world_population = Map[String, String]()
     val data = Source.fromFile("world_population.csv")
 
@@ -77,15 +101,24 @@ object KafkaSpark {
 
 
     val messages = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaConf, topics)
-    val tojson = messages.mapValues(x =>  ((x : String).parseJson).convertTo[CountryData])
+    val tojson = messages.mapValues(x =>  ((x : String).parseJson).convertTo[CountryData]).filter(x=> x._2.New_Cases_text != "")
 
-    def update_corona_cases(key: String, value: Option[CountryData], state: State[(String, Double)]): (String, Double) = {
+    def update_corona_cases(key: String, value: Option[CountryData], state: State[rollingAverage]): (String, Double) = {
       val data: CountryData = value.getOrElse(new CountryData("","","","","","","",""))
       val country = data.Country_text.replace("_", " ")
 
+
+      //ROLLING AVERAGE LOGIC
+      val ra = state.getOption.getOrElse(new rollingAverage(14))
+      val newCases = data.New_Cases_text.replace(",","").toInt
+      ra.addData(newCases)
+      val current_average = ra.calculateAverage()
+      state.update(ra)
+      //ROLLING AVERAGE LOGIC
       
       if(world_population.contains(country)){
         val total_population = world_population(country).toDouble
+
         val total_cases = data.Total_Cases_text.replace(",","").toDouble
 
         var total_recovered = 0.0
@@ -94,13 +127,13 @@ object KafkaSpark {
         }
         val active_cases = total_cases - total_recovered
         val cases_per_1000 = active_cases*100000/total_population
-        state.update((key, cases_per_1000))
+        //state.update((key, cases_per_1000))
         (key,cases_per_1000)
       } else (
 
         (key, 0.0)
       )
-      
+
     }
 
     val pairs = tojson.mapWithState(StateSpec.function(update_corona_cases _))
