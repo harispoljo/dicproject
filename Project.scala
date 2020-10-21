@@ -15,6 +15,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, Produce
 import scala.util.Random
 import com.fasterxml.jackson.databind._
 import spray.json._
+import scala.io._
 
 import org.apache.spark.sql.cassandra._
 import com.datastax.spark.connector._
@@ -47,6 +48,7 @@ object KafkaSpark {
 
 
     case class CountryData(Active_Cases_text: String, Country_text: String, Last_Update: String, New_Cases_text: String, New_Deaths_text: String, Total_Cases_text: String, Total_Deaths_text: String, Total_Recovered_text: String)
+    case class World_Population(country: String, population: Int)
 
     object MyJsonProtocol extends DefaultJsonProtocol {
       implicit val CountryDataFormat = jsonFormat8(CountryData)
@@ -58,14 +60,47 @@ object KafkaSpark {
     val mapper = new ObjectMapper();
     val factory = mapper.getJsonFactory()
 
-    val messages = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaConf, topics)
-    val tojson = messages.mapValues(x =>  ((x : String).parseJson).convertTo[CountryData]).filter(x=> x._2.New_Cases_text != "")
 
-    def update_corona_cases(key: String, value: Option[CountryData], state: State[(String, Integer)]): (String, Integer) = {
+    /*read world population*/
+    
+    var world_population = Map[String, String]()
+    val data = Source.fromFile("world_population.csv")
+
+    for (line <- data.getLines) {
+        val cols = line.split(",")
+        if(cols.size>1){
+          val tmp : Map[String, String] = Map(cols(0) -> cols(1))
+          world_population = world_population.++(tmp)
+        }
+    }
+    data.close
+
+
+    val messages = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaConf, topics)
+    val tojson = messages.mapValues(x =>  ((x : String).parseJson).convertTo[CountryData])
+
+    def update_corona_cases(key: String, value: Option[CountryData], state: State[(String, Double)]): (String, Double) = {
       val data: CountryData = value.getOrElse(new CountryData("","","","","","","",""))
-      val newCases = data.New_Cases_text.replace(",","").toInt
-      state.update((key,newCases))
-      (key,newCases)
+      val country = data.Country_text.replace("_", " ")
+
+      
+      if(world_population.contains(country)){
+        val total_population = world_population(country).toDouble
+        val total_cases = data.Total_Cases_text.replace(",","").toDouble
+
+        var total_recovered = 0.0
+        if(data.Total_Recovered_text != "N/A"){
+          total_recovered = data.Total_Recovered_text.replace(",","").toDouble
+        }
+        val active_cases = total_cases - total_recovered
+        val cases_per_1000 = active_cases*100000/total_population
+        state.update((key, cases_per_1000))
+        (key,cases_per_1000)
+      } else (
+
+        (key, 0.0)
+      )
+      
     }
 
     val pairs = tojson.mapWithState(StateSpec.function(update_corona_cases _))
