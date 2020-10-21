@@ -64,7 +64,6 @@ object KafkaSpark {
       }
 
       def calculateAverage(): Double ={
-        print(datalist.foldLeft(0)(_ + _)/datalist.length)
         datalist.foldLeft(0)(_ + _)/datalist.length
       }
 
