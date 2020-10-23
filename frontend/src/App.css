@@ -22,3 +22,8 @@
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+.Data {
+  column-count: 4;
+  column-gap: 1em;
+}
