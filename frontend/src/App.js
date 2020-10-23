@@ -47,8 +47,10 @@ class App extends Component {
         <div className="App-header">
           <img src={logo} className="App-logo" alt="logo" />
           <h2>DIC PROJECT - CORONA</h2>
-        </div>
+        </div >
+        <div className="Data" >
         {this.state.data.sort((a, b) => parseFloat(a.corona_cases) - parseFloat(b.corona_cases)).map(item => resource(item.country, item.corona_cases))}
+        </div>
       </div>
     );
   }
@@ -56,10 +58,10 @@ class App extends Component {
 
 function resource(countryname, casedensity) {
   if (parseFloat(casedensity) > 100){
-    return <div key={parseFloat(casedensity)} style={{color:"red", display:"block"}}><h1 style={{display:"inline"}}>{countryname}</h1> <h1 style={{display:"inline"}}>{parseFloat(casedensity).toFixed(2)}</h1> </div>
+    return <div key={parseFloat(casedensity)} style={{color:"red", display:"block"}}><h2 style={{display:"inline"}}>{countryname+" "+parseFloat(casedensity).toFixed(2)}</h2> </div>
   }
   else
-    return <div key={parseFloat(casedensity)} style={{color:"blue", display:"block"}}><h1 style={{display:"inline"}}>{countryname}</h1> <h1 style={{display:"inline"}}>{parseFloat(casedensity).toFixed(2)}</h1> </div>
+    return <div key={parseFloat(casedensity)} style={{color:"blue", display:"block"}}><h2 style={{display:"inline"}}>{countryname+" "+parseFloat(casedensity).toFixed(2)}</h2> </div>
 
 }
 export default App;
