@@ -1,37 +1,13 @@
-package generator
 
-import java.util.{Date, Properties}
+
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, ProducerConfig}
-import scala.util.Random
 import kafka.producer.KeyedMessage
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
+import java.util.{Properties}
+object Middleman extends App {
 
-object ScalaProducerExample extends App {
 
-    /**
-      * Returns the text (content) from a REST URL as a String.
-      * Inspired by http://matthewkwong.blogspot.com/2009/09/scala-scalaiosource-fromurl-blockshangs.html
-      * and http://alvinalexander.com/blog/post/java/how-open-url-read-contents-httpurl-connection-java
-      *
-      * The `connectTimeout` and `readTimeout` comes from the Java URLConnection
-      * class Javadoc.
-      * @param url The full URL to connect to.
-      * @param connectTimeout Sets a specified timeout value, in milliseconds,
-      * to be used when opening a communications link to the resource referenced
-      * by this URLConnection. If the timeout expires before the connection can
-      * be established, a java.net.SocketTimeoutException
-      * is raised. A timeout of zero is interpreted as an infinite timeout.
-      * Defaults to 5000 ms.
-      * @param readTimeout If the timeout expires before there is data available
-      * for read, a java.net.SocketTimeoutException is raised. A timeout of zero
-      * is interpreted as an infinite timeout. Defaults to 5000 ms.
-      * @param requestMethod Defaults to "GET". (Other methods have not been tested.)
-      *
-      * @example get("http://www.example.com/getInfo")
-      * @example get("http://www.example.com/getInfo", 5000)
-      * @example get("http://www.example.com/getInfo", 5000, 5000)
-      */
     @throws(classOf[java.io.IOException])
     @throws(classOf[java.net.SocketTimeoutException])
     def get(url: String,
@@ -66,7 +42,7 @@ object ScalaProducerExample extends App {
             val content = get(url).replace(" ","_")
             val mapper = new ObjectMapper()
             val node = mapper.readTree(content);
-
+            while(true){
             for (x <- List.range(0, node.size-1)){
 
                 val countryjson = node.get(x)
@@ -79,13 +55,12 @@ object ScalaProducerExample extends App {
                 }
             }
 
+            Thread.sleep(30000)
+          }
         } catch {
             case ioe: java.io.IOException =>  // handle this
             case ste: java.net.SocketTimeoutException => // handle this
         }
-
-
-
 
     producer.close()
 }

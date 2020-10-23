@@ -31,7 +31,13 @@ class App extends Component {
 
 
   componentDidMount() {
-    this.getData();
+    let intervalId = setInterval(this.getData, 5000);
+    this.setState({id:intervalId})
+  }
+
+  componentWillUnmount(){
+    clearInterval(this.state.id);
+
   }
 
   render() {
@@ -40,15 +46,20 @@ class App extends Component {
       <div className="App">
         <div className="App-header">
           <img src={logo} className="App-logo" alt="logo" />
-          <h2>Welcome to React</h2>
+          <h2>DIC PROJECT - CORONA</h2>
         </div>
-        <p className="App-intro">
-          To get started, edit <code>src/App.js</code> and save to reload.
-        </p>
-        {this.state.data.map(item => (<li key={item.country}>{item.country+" "+item.corona_cases}</li>))}
+        {this.state.data.sort((a, b) => parseFloat(a.corona_cases) - parseFloat(b.corona_cases)).map(item => resource(item.country, item.corona_cases))}
       </div>
     );
   }
 }
 
+function resource(countryname, casedensity) {
+  if (parseFloat(casedensity) > 100){
+    return <div key={parseFloat(casedensity)} style={{color:"red", display:"block"}}><h1 style={{display:"inline"}}>{countryname}</h1> <h1 style={{display:"inline"}}>{parseFloat(casedensity).toFixed(2)}</h1> </div>
+  }
+  else
+    return <div key={parseFloat(casedensity)} style={{color:"blue", display:"block"}}><h1 style={{display:"inline"}}>{countryname}</h1> <h1 style={{display:"inline"}}>{parseFloat(casedensity).toFixed(2)}</h1> </div>
+
+}
 export default App;

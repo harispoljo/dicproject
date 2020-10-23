@@ -70,9 +70,6 @@ object KafkaSpark {
         }
       }
 
-      def calculateAverage(): Double ={
-        datalist.foldLeft(0)(_ + _)/datalist.length
-      }
 
       def calculatecasedensity(): Double={
         datalist.foldLeft(0)(_ + _)/population*100000
@@ -126,24 +123,23 @@ object KafkaSpark {
 
 
     def update_corona_cases(key: String, value: Option[CountryData], state: State[Country_state]): (String, Any) = {
-      
-      val data: CountryData = value.getOrElse(new CountryData("","","","","","","",""))
+
+      val data: CountryData = value.getOrElse(new CountryData("","error","","0","","","",""))
       val country = data.Country_text.replace("_", " ")
       val data_stored = 14
-      
 
 
-      //ROLLING AVERAGE LOGIC
+
+      //case density LOGIC
       val country_state = state.getOption.getOrElse(new Country_state(data_stored, world_population(country).toDouble))
       val newCases = data.New_Cases_text.replace(",","").toInt
       country_state.addData(newCases)
       state.update(country_state)
 
-      val current_average = country_state.calculateAverage()
       val casedensity = country_state.calculatecasedensity()
-      //ROLLING AVERAGE LOGIC
+      //case density LOGIC
 
-      (country, (current_average, casedensity))
+      (country, casedensity)
 
     }
 
