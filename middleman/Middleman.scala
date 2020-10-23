@@ -55,7 +55,7 @@ object Middleman extends App {
                 }
             }
 
-            Thread.sleep(30000)
+            Thread.sleep(5000)
           }
         } catch {
             case ioe: java.io.IOException =>  // handle this
