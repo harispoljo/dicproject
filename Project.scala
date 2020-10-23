@@ -39,7 +39,7 @@ object KafkaSpark {
     // make a connection to Kafka and read (key, value) pairs from it
     val conf = new SparkConf().setAppName("finalproject").setMaster("local[2]")
     val sparkContext = new SparkContext(conf)
-    val ssc = new StreamingContext(sparkContext, Seconds(5))
+    val ssc = new StreamingContext(sparkContext, Seconds(1))
     ssc.checkpoint(".")
 
 
@@ -50,22 +50,42 @@ object KafkaSpark {
       "zookeeper.connection.timeout.ms" -> "1000")
 
 
-      case class rollingAverage(amountofdays: Int) {
+      case class Country_state(amountofdays: Int, population: Double) {
       private val datalist = new Queue[Int]()
 
       def addData(data: Int): Unit  = {
+
+        val start = 5
+        val end   = 15
+        val rnd = new scala.util.Random
+        val noise = start + rnd.nextInt( (end - start) + 1 )
+
+
         if (datalist.length < amountofdays){
-          datalist.enqueue(data)
+          datalist.enqueue(data+noise)
         }
         else{
           datalist.dequeue
-          datalist.enqueue(data)
+          datalist.enqueue(data+noise)
         }
       }
 
       def calculateAverage(): Double ={
         datalist.foldLeft(0)(_ + _)/datalist.length
       }
+
+      def calculatecasedensity(): Double={
+        datalist.foldLeft(0)(_ + _)/population*100000
+      }
+
+      def getsum(): Double={
+        datalist.foldLeft(0)(_ + _)
+      }
+
+      def getpop(): Double={
+        population
+      }
+
 
 
     }
@@ -100,44 +120,36 @@ object KafkaSpark {
 
 
     val messages = KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](ssc, kafkaConf, topics)
-    val tojson = messages.mapValues(x =>  ((x : String).parseJson).convertTo[CountryData]).filter(x=> x._2.New_Cases_text != "")
+    val tojson = messages.mapValues(x =>  ((x : String).parseJson).convertTo[CountryData])
+    val filter_new_cases = tojson.filter(x=> x._2.New_Cases_text != "")
+    val filter_countries = filter_new_cases.filter(x => world_population.contains(x._2.Country_text.replace("_", " ")))
 
-    def update_corona_cases(key: String, value: Option[CountryData], state: State[rollingAverage]): (String, Double) = {
+
+    def update_corona_cases(key: String, value: Option[CountryData], state: State[Country_state]): (String, Any) = {
+      
       val data: CountryData = value.getOrElse(new CountryData("","","","","","","",""))
       val country = data.Country_text.replace("_", " ")
-
-
-      //ROLLING AVERAGE LOGIC
-      val ra = state.getOption.getOrElse(new rollingAverage(14))
-      val newCases = data.New_Cases_text.replace(",","").toInt
-      ra.addData(newCases)
-      val current_average = ra.calculateAverage()
-      state.update(ra)
-      //ROLLING AVERAGE LOGIC
+      val data_stored = 14
       
-      if(world_population.contains(country)){
-        val total_population = world_population(country).toDouble
 
-        val total_cases = data.Total_Cases_text.replace(",","").toDouble
 
-        var total_recovered = 0.0
-        if(data.Total_Recovered_text != "N/A"){
-          total_recovered = data.Total_Recovered_text.replace(",","").toDouble
-        }
-        val active_cases = total_cases - total_recovered
-        val cases_per_1000 = active_cases*100000/total_population
-        //state.update((key, cases_per_1000))
-        (key,cases_per_1000)
-      } else (
+      //ROLLING AVERAGE LOGIC
+      val country_state = state.getOption.getOrElse(new Country_state(data_stored, world_population(country).toDouble))
+      val newCases = data.New_Cases_text.replace(",","").toInt
+      country_state.addData(newCases)
+      state.update(country_state)
 
-        (key, 0.0)
-      )
+      val current_average = country_state.calculateAverage()
+      val casedensity = country_state.calculatecasedensity()
+      //ROLLING AVERAGE LOGIC
+
+      (country, (current_average, casedensity))
 
     }
 
-    val pairs = tojson.mapWithState(StateSpec.function(update_corona_cases _))
-    pairs.print()
-    pairs.saveToCassandra("covid_space", "covid", SomeColumns("country", "corona_cases"))
+    val pairs = filter_countries.mapWithState(StateSpec.function(update_corona_cases _))
+    val order = pairs.transform(x => x.sortByKey())
+    order.saveToCassandra("covid_space", "covid", SomeColumns("country", "corona_cases"))
 
     ssc.start()
     ssc.awaitTermination()
